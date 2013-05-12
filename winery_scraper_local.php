@@ -15,11 +15,18 @@
 	// set the default time zone to PST
 	date_default_timezone_set('America/Los_Angeles');
 
+	/*
+	// scrape_winery function
+	*/
 	function scrape_winery($url, $wdb) {
 	
 		// Load HTML from a HTML file 
 		$html = file_get_html($url);
 		// $html = file_get_html("V. Sattui Winery.html");
+
+		/*
+		**	Process Winery details
+		*/
 	 
 	 	// Locate the winery url in the winerylabel <div>
 		foreach ($html->find('.winerylabel') as $wl) {
@@ -103,6 +110,7 @@
 			}
 		}
 
+		
 		// find where the tasting room contact info starts
 		if (($cpos = strpos($wp2, "Tastings") ) === false) {
 			echo "No match for tasting room found" .PHP_EOL;
@@ -131,6 +139,10 @@
 			echo "Last inserted winery record did not return a valid winery id";
 			die("invalid w_id");
 		}
+
+		/*
+		**	Process the Winery Features list
+		*/
 
 		// Winery Features
 		$e = $html->find('div[id=features]');
@@ -180,6 +192,10 @@
 	    }
 	    echo PHP_EOL;
 
+	    /*
+	    **	Process the Varietals lsit for the winery
+	    */
+
 		// Varietal types
 
 		$e = $html->find('div[id=varietals]');
@@ -194,7 +210,7 @@
 				    echo "varietal selector: " . $varietal_selector . PHP_EOL;
 
 				    $var_query = "SELECT var_id FROM Varietals WHERE type = '$varietal_selector'";
-				    echo "Varietal Query: " . $var_query . PHP_EOL;
+				    // echo "Varietal Query: " . $var_query . PHP_EOL;
 				    if ($res = mysqli_query($wdb, $var_query)) {
 				    	$row = mysqli_fetch_row($res);
 				    	$var_id = $row[0];
@@ -204,7 +220,7 @@
 				    }
 
 				    $wv_query = "INSERT INTO WineryVarieties(w_id, var_id, u_date)"." VALUES ('$w_id' , '$var_id' , '$c_date')";
-				    echo "WV Query: " . $wv_query . PHP_EOL;
+				    // echo "WV Query: " . $wv_query . PHP_EOL;
 				    $r = mysqli_query($wdb, $wv_query) or die("Error on WineryVarieties INSERT query");
 				    
 			    } // end-foreach
@@ -212,15 +228,51 @@
 			}
 		}
 		
+		/*
+		**	Process Wine Club details
+		*/
+
 		// Wine club details
 		$e = $html->find('div[id=wineclub]');
 		$w_club = addslashes($e[0]->plaintext);
-		// echo "Wine Club: " . $w_club . PHP_EOL;
-		$wc_query = "INSERT INTO Wineclub(description) VALUES ('$w_club')";
-		echo "Wine Club query: " . $wc_query . PHP_EOL;
-		$r = mysqli_query($wdb, $wc_query) or die("Error on WineryVarieties INSERT query");
+		$w_club_name = $e[0]->children(0)->plaintext;
+		$w_club_details = $e[0]->children(2);
+		echo "Club name: " . $w_club_name . PHP_EOL;
+		echo "Club details: " . $w_club_details . PHP_EOL;
+		if (isset($w_club_details)) {
+			// locate club url
+			$a = $w_club_details->find('a',0);
+			$w_club_lnk = $a->href;
+			echo "Club URL: " . $w_club_lnk . PHP_EOL;
 
-		// Tasting room details 	
+			// locate club ph #
+			$cd = strip_tags($w_club_details);
+			$nedl = "call them at ";
+			if (($cpos = strpos($cd, $nedl) ) === false) {
+				echo "No match for wine club ph #" . PHP_EOL;
+				$w_club_ph="";
+			} else {
+				$ph_pos = strlen($nedl) + $cpos;
+				$dot = strpos($cd, ".");
+				$w_club_ph = substr($cd, $ph_pos, ($dot-$ph_pos));
+				echo "Club ph: " . $w_club_ph . PHP_EOL;
+			}
+		} else {
+			$w_club_lnk = "";
+			$w_club_ph = "";
+		}
+		
+
+		
+		// echo "Wine Club: " . $w_club . PHP_EOL;
+		$wc_query = "INSERT INTO Wineclub(name, description, wc_ph, wc_url)" .
+					" VALUES ('$w_club_name' , '$w_club', '$w_club_ph' , '$w_club_lnk')";
+		echo "Wine Club query: " . $wc_query . PHP_EOL;
+		$r = mysqli_query($wdb, $wc_query) or die("Error on Wineclub INSERT query");
+
+		/*
+		** Process Tasting Room details
+		*/	
 		$e = $html->find('div[id=tastingroom]');
 		$tr = $e[0]->innertext;
 
@@ -249,7 +301,7 @@
 			} else {
 			    // echo "<br> loccated at: $epos" . "start pos $cpos" . PHP_EOL;
 			}
-			$music = strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2)));
+			$music = addslashes(strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2))));
 			echo "Music: $music" . PHP_EOL;
 
 		}
@@ -272,7 +324,7 @@
 			} else {
 			    // echo "<br> loccated at: $epos" . "start pos $cpos" . PHP_EOL;
 			}
-			$view = strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2)));
+			$view = addslashes(strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2))));
 			echo "View: $view" . PHP_EOL;
 		}
 
@@ -294,14 +346,14 @@
 			} else {
 			    // echo "break loccated at: $epos" . "start pos $cpos" . PHP_EOL;
 			}
-			$food = strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2)));
+			$food = addslashes(strip_tags(substr($tr, $cpos+2, ($epos-$cpos-2))));
 			echo "Food: $food" . PHP_EOL;
 		}
 
 
 		$img = $e[0]->find('img[alt]');
 
-		echo "img src: " . $img[0]->src . PHP_EOL;
+		// echo "img src: " . $img[0]->src . PHP_EOL;
 
 		$ls = $img[0]->src;
 		$needle = "taste_";
@@ -319,7 +371,7 @@
 		$cont_oldworld = $val;
 		echo "contemporary vs old world: " . $cont_oldworld .PHP_EOL;
 
-		echo "img src: " . $img[2]->src . PHP_EOL;
+		// echo "img src: " . $img[2]->src . PHP_EOL;
 
 		$ls = $img[2]->src;
 		$needle = "taste_";
@@ -337,7 +389,7 @@
 		$form_relax = $val;
 		echo "formal vs relaxed: " . $form_relax .PHP_EOL;
 
-		echo "img src: " . $img[4]->src . PHP_EOL;
+		// echo "img src: " . $img[4]->src . PHP_EOL;
 
 		$ls = $img[4]->src;
 		$needle = "taste_";
@@ -365,7 +417,7 @@
 		$tr_query = "INSERT INTO TastingRoom(music_type, view, food_type, cont_oldworld, form_relax, lively_quiet, descr)" .
 		" VALUES ('$music' , '$view' , '$food' , '$cont_oldworld' , '$form_relax' , '$lively_quiet' , '$w_tasting_rm')";
 		echo "Tasting Room query: " . $tr_query . PHP_EOL;
-		$r = mysqli_query($wdb, $tr_query) or die("Error on WineryVarieties INSERT query");
+		$r = mysqli_query($wdb, $tr_query) or die("Error on TastingRoom INSERT query");
 
 	} // end scrape_winery()
 
@@ -377,8 +429,9 @@
 
 	$wdb = mysqli_connect('localhost', 'andrew', 'fredfred', 'Wineries') or die('error connecting to my sql server');
 
-	$scrape_url = 'http://www.napavintners.com/wineries/wineries_by_name.asp?wineryname=V';
+	$scrape_url = 'http://www.napavintners.com/wineries/wineries_by_name.asp?wineryname=A';
 
+	echo "Open web site" . PHP_EOL;
 	$ahtml = file_get_html($scrape_url);
 
 	// Find all winery boxes
